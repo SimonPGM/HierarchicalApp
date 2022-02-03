@@ -24,11 +24,12 @@ datos %<>%
 
 final_data <- datos %>%
     group_by(Fecha, Nombre.municipio) %>%
-    summarise(Dia_semana = wday(Fecha, label = T),
-    Mes = month(Fecha, label = T), Anio = year(Fecha),
-    Muertos = sum(Recuperado == "Fallecido"),
+    summarise(Dia_semana = wday(Fecha),
+    Mes = month(Fecha), Anio = year(Fecha),
+    Recuperados = sum(Recuperado != "Fallecido"),
     Cuarentena = if_else(Fecha <= "2020-10-01", "Si", "No"), # nolint
-    Vacunacion = if_else(Fecha >= "2021-02-17", "Si", "No"))
+    Vacunacion = if_else(Fecha >= "2021-02-17", "Si", "No"),
+    Post_vacaciones = if_else(Mes %in% c("jul", "ene"), "Si", "No"))
 
 final_data <- final_data[!duplicated(final_data), ]
 saveRDS(final_data, "Data.Rds")
