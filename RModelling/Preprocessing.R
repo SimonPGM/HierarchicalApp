@@ -17,19 +17,19 @@ datos %<>%
     Fecha.de.muerte = as.Date(Fecha.de.muerte), #formatting dates
     Recuperado = if_else(Recuperado == "fallecido", "Fallecido", Recuperado)) %>% #properly formatting data # nolint
     filter(Recuperado %in% c("Recuperado", "Fallecido")) %>%
-    mutate(Fecha = if_else(Recuperado == "Recuperado", Fecha.de.recuperación, Fecha.de.muerte)) %>% #creating proper date variable # nolint
-    select(Fecha, Recuperado, Nombre.municipio) %>%
+    mutate(Fecha = if_else(Recuperado == "Recuperado", Fecha.de.recuperación, Fecha.de.muerte), # nolint
+    Mes = month(Fecha), Anio = year(Fecha)) %>% #creating proper date variable # nolint
+    select(Mes, Anio, Recuperado, Nombre.municipio) %>%
     filter(Nombre.municipio %in% area) %>%
-    arrange(Fecha)
+    arrange(Mes, Anio)
 
 final_data <- datos %>%
-    group_by(Fecha, Nombre.municipio) %>%
-    summarise(Dia_semana = wday(Fecha),
-    Mes = month(Fecha), Anio = year(Fecha),
+    group_by(Anio, Mes, Nombre.municipio) %>%
+    summarise(
     Recuperados = sum(Recuperado != "Fallecido"),
-    Cuarentena = if_else(Fecha <= "2020-10-01", "Si", "No"), # nolint
-    Vacunacion = if_else(Fecha >= "2021-02-17", "Si", "No"),
-    Post_vacaciones = if_else(Mes %in% c("jul", "ene"), "Si", "No"))
+    Cuarentena = if_else(Anio > 2020, "No", if_else(Mes >= 10, "No", "Si")), # nolint
+    Vacunacion = if_else(Anio == 2020, "No", if_else(Mes >= 2, "Si", "No")),
+    Post_vacaciones = if_else(Mes %in% c(7, 1), "Si", "No"))
 
 final_data <- final_data[!duplicated(final_data), ]
 saveRDS(final_data, "Data.Rds")
