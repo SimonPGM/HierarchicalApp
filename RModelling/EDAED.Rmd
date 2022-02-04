@@ -1,5 +1,5 @@
 ---
-title: "Análisis descriptivo"
+title: "Informe técnico"
 author: "Simón Pedro Galeano Muñoz"
 output: 
   html_document:
@@ -302,4 +302,4 @@ se encuentra una desviación grave.
 
 # Presentacion del mejor modelo 
 En esta sección deberían ir algunas gráficas del comportamiento del modelo, sin embargo se invita
-a explorar las distintas visualizaciones que ofrece la applicación.
+a explorar las distintas visualizaciones que ofrece la [applicación](https://hierarchicalcovid.herokuapp.com/).
