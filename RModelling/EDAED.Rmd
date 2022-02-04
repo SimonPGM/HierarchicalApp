@@ -1,0 +1,305 @@
+---
+title: "Informe técnico"
+author: "Simón Pedro Galeano Muñoz"
+output: 
+  html_document:
+    toc: true
+    theme: paper
+    code_folding: hide
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, fig.align = "center")
+library(knitr)
+library(tidyverse)
+library(magrittr)
+library(lubridate)
+library(plotly)
+```
+
+```{r lectura-datos}
+datos <- readRDS("Data.Rds")
+```
+
+# Construcción de la base de datos
+En primer lugar, cabe mencionar que se tomo una base de datos de la plataforma 
+[Datos Abiertos Colombia](https://www.datos.gov.co/), más específicamente
+la base de datos [Casos positivos de Covid-19 en el departamento de Antioquia](https://www.datos.gov.co/Salud-y-Protecci-n-Social/Casos-positivos-de-Covid-19-en-el-departamento-de-/w3du-c2j6).
+
+Dicha base de datos se compone de 30 columnas (ver diccionario de la base de datos) que contienen información acerca de los casos positivos que se han 
+detectado en el departamento de Antioquia, como por ejemplo la fecha de notificación, el municipio de residencia del infectado, la fecha de recuperación,
+entre otras. Se deja un breve vistazo al diccionario de la base de datos.
+
+![](./dict.png)
+
+Sin embargo, dicha base no servía para la modelación, puesto que cada registro representa un paciente, así que hubo que agrupar por mes, año y
+municipio, para así contar el total de casos mensuales discriminando por municipio. Además de eso, se crearon variables que indicaran si se
+estaba en periodo de cuarentena obligatori, si ya había iniciado la vacunación si era una época post vacaciones, etc.
+
+```{r codedb, echo=T, eval=F}
+# loading libraries
+library(tidyverse)
+library(magrittr)
+library(lubridate)
+
+# reading original data
+datos <- read.csv("./Casos_positivos_de_Covid-19_en_el_departamento_de_Antioquia.csv") # nolint
+
+area <- c(
+  "MEDELLIN", "ITAGUI", "BELLO", "GIRARDOTA", "CALDAS",
+  "ENVIGADO", "SABANETA", "LA ESTRELLA", "COPACABANA", "BARBOSA"
+) # metropolitan area municiples # nolint
+# cleaning data
+datos %<>%
+  select(Fecha.de.recuperación, Nombre.municipio, Recuperado, Fecha.de.muerte) %>% # nolint selecting necessary variables to build the data base for modelling
+  mutate(
+    Fecha.de.recuperación = str_extract(Fecha.de.recuperación, "\\d+-\\d+-\\d+"), # nolint
+    Fecha.de.recuperación = as.Date(Fecha.de.recuperación), # formatting dates
+    Fecha.de.muerte = str_extract(Fecha.de.muerte, "\\d+-\\d+-\\d+"),
+    Fecha.de.muerte = as.Date(Fecha.de.muerte), # formatting dates
+    Recuperado = if_else(Recuperado == "fallecido", "Fallecido", Recuperado)
+  ) %>% # properly formatting data # nolint
+  filter(Recuperado %in% c("Recuperado", "Fallecido")) %>%
+  mutate(
+    Fecha = if_else(Recuperado == "Recuperado", Fecha.de.recuperación, Fecha.de.muerte), # nolint
+    Mes = month(Fecha), Anio = year(Fecha)
+  ) %>% # creating proper date variable # nolint
+  select(Mes, Anio, Recuperado, Nombre.municipio) %>%
+  filter(Nombre.municipio %in% area) %>%
+  arrange(Mes, Anio)
+
+final_data <- datos %>%
+  group_by(Anio, Mes, Nombre.municipio) %>%
+  summarise(
+    Recuperados = sum(Recuperado != "Fallecido"),
+    Cuarentena = if_else(Anio > 2020, "No", if_else(Mes >= 10, "No", "Si")), # nolint
+    Vacunacion = if_else(Anio == 2020, "No", if_else(Mes >= 2, "Si", "No")),
+    Post_vacaciones = if_else(Mes %in% c(7, 1), "Si", "No")
+  )
+
+final_data <- final_data[!duplicated(final_data), ]
+saveRDS(final_data, "Data.Rds")
+```
+
+Se muestran algunas filas del resultado final.
+
+```{r showdata}
+head(datos) %>%
+  kable(col.names = c("Año", "Mes", "Municipio", "Recuperados", "Cuarentena", "Vacunación", "Post vacaciones")) #nolint
+```
+
+# Gráficos descriptivos
+
+En los siguientes gráficos el propósito es entender el comportamiento de las variables y descubrir como estas pueden ayudar en el
+proceso de modelación.
+
+
+```{r dist}
+ggplot(datos, aes(Recuperados)) +
+  geom_histogram(fill = "cyan", color = "darkblue", bins = nclass.Sturges(datos$Recuperados)) #nolint
+```
+
+Se puede observar que presenta una distribución con sesgo a derecha, por lo que una distribución Poisson con un parámetro $\lambda$ no
+muy elevado sería adecuado para la modelación del número de recuperados por mes.
+
+Ahora, se intenta observar si la cantidad de recuperados año a año es variable o no, para saber si considerarla en el modelo.
+
+```{r recuperados-anio}
+p1 <- ggplot(datos, aes(Anio, Recuperados)) +
+  geom_col(aes(fill = factor(Anio)), position = position_stack()) +
+  labs(x = "Año", title = "Número de recuperaciones anuales", fill = "Año") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+p1
+```
+
+En primer lugar se aprecia que el número de recuperados varia en cada uno de los años, siendo 2021 el que presenta más recuperados.
+Esto tiene mucho sentido puesto que el 2020 fue el año que el virus se esparció a nivel mundial y las vacunas apenas estaban en 
+desarrollo mientras que para el 2021 estas se empezaron a aplicar a los habitantes, por otro lado, la cantidad de recuperados en 2022 es 
+muy baja, sin embargo hay que tener en cuenta que es el año en curso y apenas se completo el primer mes del mismo, aún así llama mucho la
+atención que en un solo mes se este logrando aproximadamente la mitad de recuperaciones respecto al 2020 lo cual sugiere que la cantidad 
+de personas recuperadas por covid está aumentando anualmente, esto se puede deber a que cada día más personas van siendo vacunadas y,
+ por lo tanto, adquiriendo inmunidad.
+
+```{r recuperados-mes}
+p2 <- ggplot(datos, aes(Mes, Recuperados)) +
+  scale_x_discrete() +
+  geom_col(aes(fill = factor(Mes))) +
+  labs(x = "Mes", title = "Número de recuperaciones anuales", fill = "Mes") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+p2
+```
+
+Observe ahora que la cantidad de personas recuperadas en los distintos meses difiere lo cual sugiere que esta covariable es importante
+para el proceso de modelación. El mes 1 (enero) es aquel en el que se presenta mayor número de recuperaciones mientras que los 2 y 
+3 (febrero y marzo) son los que menos recuperaciones hay, además, se puede notar que a mitad de año hay cierta tendencia creciente, por lo
+que es buena idea incluir una variable que indique si se está en una época inmediatamente posterior a las típicas épocas de vacaciones (diciembre y junio).
+
+Ahora, una duda natural surge de si habrá diferencia entre municipios, en efecto.
+
+```{r recuperados-municipio}
+p3 <- ggplot(datos, aes(Mes, Recuperados)) +
+  scale_x_discrete() +
+  geom_col(aes(fill = factor(Nombre.municipio)), position = position_fill()) +
+  labs(x = "Mes", title = "Número de recuperaciones mensuales por municipio", fill = "Municipio") + #nolint
+  facet_wrap(~Anio) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+p3
+```
+
+Del gráfico anterior se puede observar que hay una diferencia del número de recuperados mes a mes, también se puede apreciar
+que Medellín presenta comportamientos anómalos respecto al resto de municipios.
+
+Por último resulta natural pensar que tanto la cuarentena como el inicio de la vacunación represetnan un cambio en el número de
+infectados y por tanto en el número de recuperados, así que se incluyen en la modelación.
+
+# Modelos a considerar y construcción de los modelos {.tabset .tabset-fade .tabset-pills}
+En esta sección se presentan los modelos considerados para la explicación del fenómeno en cuestión.
+Hay que tener en cuenta que $y$ hace referencia a la cantidad de 
+recuperados, $i$ al municipio y $j$ al mes.
+
+## Modelo nulo
+\begin{equation*}
+\begin{split}
+y_{ij} &\sim \text{Poisson}(\lambda_{ij}) \\
+log(\lambda_{ij}) &= \beta_0 + b_{0i} \\
+b_0 &\sim N(0, \sigma_{b_0}^2) 
+\end{split}
+\end{equation*}
+
+```{r modnull, echo = T, eval=F}
+modnull <- glmer(Recuperados ~ 1 + (1 | Nombre.municipio),
+  data = datos, family = poisson()) # nolint
+```
+
+## Modelo 1
+\begin{equation*}
+\begin{split}
+y_{ij} &\sim \text{Poisson}(\lambda_{ij}) \\
+log(\lambda_{ij}) &= \beta_0 +  \beta_1 \times \text{Año}_{ij} + b_{0i} \\
+b_0 &\sim N(0, \sigma_{b_0}^2) 
+\end{split}
+\end{equation*}
+
+```{r modone, echo = T, eval=F}
+modone <- glmer(Recuperados ~  Anio + (1 | Nombre.municipio),
+  data = datos, family = poisson()) # nolint
+```
+
+## Modelo 2
+
+\begin{equation*}
+\begin{split}
+y_{ij} &\sim \text{Poisson}(\lambda_{ij}) \\
+log(\lambda_{ij}) &= \beta_0 +  \beta_1 \times \text{Año}_{ij} + \beta_2 \times \text{Mes}_{i} + b_{0i} \\
+b_0 &\sim N(0, \sigma_{b_0}^2) 
+\end{split}
+\end{equation*}
+
+```{r modtwo, echo = T, eval=F}
+modtwo <- glmer(Recuperados ~ Anio + Mes + (1 | Nombre.municipio),
+  data = datos, family = poisson()) # nolint
+```
+
+## Modelo 3
+
+\begin{equation*}
+\begin{split}
+y_{ij} &\sim \text{Poisson}(\lambda_{ij}) \\
+log(\lambda_{ij}) &= \beta_0 +  \beta_1 \times \text{Año}_{ij} + \beta_2 \times \text{Mes}_{i} + b_{0i} + b_{1i} \times \text{Mes}_{i} \\
+[b_0 \ b_1]^T &\sim N(\underline{\mathbf{0}}, \Sigma_1) 
+\end{split}
+\end{equation*}
+
+donde 
+$$
+\Sigma_1 = \begin{bmatrix}
+\sigma_{b_0}^2 \ \sigma_{b_{01}} \\
+\sigma_{b_{01}} \ \sigma_{b_1}^2
+\end{bmatrix}
+$$
+
+```{r modthree, echo = T, eval=F}
+modthree <- glmer(Recuperados ~ Anio + Mes + (Mes | Nombre.municipio),
+  data = datos, family = poisson()) # nolint
+```
+
+## Modelo 4
+
+\begin{equation*}
+\begin{split}
+y_{ij} &\sim \text{Poisson}(\lambda_{ij}) \\
+log(\lambda_{ij}) &= \beta_0 +  \beta_1 \times \text{Año}_{ij} + \beta_2 \times \text{Mes}_{i} + \beta_3 \times \text{VacunacionSi}_{ij} + b_{0i} + b_{1i} \times \text{Mes}_{i} \\
+[b_0 \ b_1]^T &\sim N(\underline{\mathbf{0}}, \Sigma_1) 
+\end{split}
+\end{equation*}
+
+donde 
+$$
+\Sigma_1 = \begin{bmatrix}
+\sigma_{b_0}^2 \ \sigma_{b_{01}} \\
+\sigma_{b_{01}} \ \sigma_{b_1}^2
+\end{bmatrix}
+$$
+
+
+```{r modfour, echo = T, eval=F}
+modfour <- glmer(Recuperados ~ Anio + Mes + Vacunacion + (Mes | Nombre.municipio), #nolint  
+  data = datos, family = poisson()) # nolint
+```
+
+## Modelo 5
+
+\begin{equation*}
+\begin{split}
+y_{ij} &\sim \text{Poisson}(\lambda_{ij}) \\
+log(\lambda_{ij}) &= \beta_0 +  \beta_1 \times \text{Año}_{ij} + \beta_2 \times \text{Mes}_{i} + \beta_3 \times \text{VacunacionSi}_{ij} + \beta_4 \times \text{CuarentenaSi}_{ij} + \beta_5 \times \text{Post_vacacionesSi}_{ij}  + b_{0i} + b_{1i} \times \text{Mes}_{i} + b_{2i} \times \text{Cuarentena}_{ij} \\
+[b_0 \ b_1 \ b_2]^T &\sim N(\underline{\mathbf{0}}, \Sigma_2) 
+\end{split}
+\end{equation*}
+
+donde 
+$$
+\Sigma_2 = \begin{bmatrix}
+\sigma_{b_0}^2 \ \sigma_{b_{01}} \ \sigma_{b_{02}} \\
+\sigma_{b_{01}} \sigma_{b_1}^2 \ \sigma_{b_{12}} \\
+\sigma_{b_{02}} \sigma_{b_{12}} \ \sigma_{b_{2}}^2
+\end{bmatrix}
+$$
+
+```{r modfive, echo = T, eval=F}
+modfive <- glmer(Recuperados ~ Anio + Mes + Vacunacion + Cuarentena + Post_vacaciones + (Cuarentena + Mes | Nombre.municipio), #nolint
+  data = datos, family = poisson()) # nolint
+```
+
+# Comparación de modelos
+Finalmente, se presenta una comparación sucesiva entre modelos a través de pruebas de razón de verosimilitud
+
+```{r}
+readRDS("comps.Rds")
+```
+
+De allí se puede observar que claramente el mejor modelo es el modelo número 5.
+
+# Análisis de residuales
+
+```{r resids}
+modfinal <- readRDS("mod.Rds")
+qqnorm(residuals(modfinal), xlab = "Cuantiles teóricos",
+ylab = "Cuantiles muestrales", main = "Gráfico de probabilidad cuantil-cuantil") #nolint
+qqline(residuals(modfinal))
+```
+
+Si bien se presentan desviaciones en las partes extremas, indicando
+colas pesadas, la parte central se ajusta muy bien a la linea recta,
+por lo que no se descarta el supuesto de normalidad ya que no
+se encuentra una desviación grave.
+
+
+
+# Presentacion del mejor modelo 
+En esta sección deberían ir algunas gráficas del comportamiento del modelo, sin embargo se invita
+a explorar las distintas visualizaciones que ofrece la [applicación](https://hierarchicalcovid.herokuapp.com/).
