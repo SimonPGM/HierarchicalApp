@@ -20,17 +20,5 @@ datos_to_vis <- data.frame(Anio = rep(datos$Anio, 2),
     Mes = rep(datos$Mes, 2), Recuperados = c(datos$Recuperados, datos$Recuperados_hat), # nolint
     Clase = rep(c("Real", "Predicho"), each = nrow(datos)),
     Municipio = rep(datos$Nombre.municipio, 2))
-View(datos_to_vis)
 
-foo <- function(df, anio, municipio) {
-    df <- df %>%
-        filter(Anio == anio, Municipio == municipio)
-
-    p <- ggplot(df, aes(Mes, Recuperados)) +
-    geom_path(aes(color = Clase))
-
-    return(p)
-}
-
-temp <- foo(datos_to_vis, 2021, "MEDELLIN")
-temp
+write.csv(datos_to_vis, "Results.csv", row.names = F)
