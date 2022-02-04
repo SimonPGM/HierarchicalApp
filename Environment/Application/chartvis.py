@@ -8,6 +8,19 @@ MONTHS = ["Enero", "Febrero", "Marzo", "Abril",
     "Octubre", "Noviembre", "Diciembre"
 ]
 
+def city_corrector(city: str):
+    
+    if city == "MEDELLIN":
+        return "Medellín"
+    
+    elif city == "ITAGUI":
+        return "Itagüí"
+    
+    elif city == "LA ESTRELLA":
+        return "La Estrella"
+        
+    return city.capitalize()
+
 def title_generator(year: int, municiple: str):
     return f"Comparación entre el modelo y los datos reales en el municipio de {municiple} en el {year}"
 
@@ -20,6 +33,6 @@ def plot(year: int, path: str, municiple: str):
     df.Mes = df.Mes.apply(lambda x: MONTHS[x-1])
     
     fig = px.line(df, x="Mes", y="Recuperados", color="Clase",
-    line_dash="Clase", hover_name="Clase", title=title_generator(year, municiple.capitalize()))
+    line_dash="Clase", hover_name="Clase", title=title_generator(year, city_corrector(municiple)))
     graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
     return graphJSON

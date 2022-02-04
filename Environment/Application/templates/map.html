@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block head %}
+<title>Mapa</title>
+{% endblock %}
+
+{% block body %}
+<main>
+    <div class="p-5 mb-4 bg-light rounded-3 models">
+        <div class="container-fluid py-5">
+            <h1 class="display-5 fw-bold">Observa los resultados del modelo geoespacialmente ({{ month }}-{{ year }})</h1>
+        </div>
+    </div>
+    <div class="mapcontainer">
+        <div class="maprow">
+            <form action="/model/map" method="POST">
+                <div class="colpickers">
+                    <label for="content">Seleccione el año</label>
+                    <select class="form-select" aria-label="Default select example" name="mapyear" id="mapyear">
+                        <option value="2020">2020</option>
+                        <option value="2021">2021</option>
+                        <option value="2022">2022</option>
+                    </select>
+                </div>
+                <div class="colpickers">
+                    <label for="content">Seleccione el mes</label>
+                    <select class="form-select" aria-label="Default select example" name="mapmonth" id="mapmonth">
+                    </select>
+                </div>
+                <div class="colpickers">
+                    <input type="submit" value="Mostrar predicciones" class="btn btn-success">
+                </div>
+            </form>
+        </div>
+        <div class="maprow">
+            <iframe src="{{ url_for('show_map') }}"></iframe>
+        </div>
+    </div>
+</main>
+<script src="../static/js/dinamyc.js"></script>
+{% endblock %}
