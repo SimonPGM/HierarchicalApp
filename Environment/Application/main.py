@@ -40,7 +40,7 @@ def index():
 @app.route("/description")
 def description():
     
-    return render_template("index.html")
+    return render_template("EDAED.html")
 
 @app.route("/model/chart", methods=["GET", "POST"])
 def model_chart():
