@@ -1,0 +1,9 @@
+div.pickers {
+    display: flex;
+    justify-content: center;
+}
+
+div.rowpickers {
+    flex-direction: row;
+    margin-left: 10%;
+}

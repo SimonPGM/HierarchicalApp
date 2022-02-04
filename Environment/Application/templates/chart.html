@@ -1,1 +1,54 @@
 {% extends "base.html" %}
+
+{% block head %}
+<title>Lineas</title>
+{% endblock %}
+
+{% block body %}
+<main>
+    <div class="p-5 mb-4 bg-light rounded-3 models">
+        <div class="container-fluid py-5">
+            <h1 class="display-5 fw-bold">Compara el modelo con la realidad</h1>
+        </div>
+    </div>
+    <form action="/model/chart" method="POST">
+        <div class="pickers">
+            <div class="rowpickers">
+                <label for="content">Seleccione el año</label>
+                <select class="form-select" aria-label="Default select example" name="chartyear" id="chartyear">
+                    <option selected value="2020">2020</option>
+                    <option value="2021">2021</option>
+                    <option value="2022">2022</option>
+                </select>
+            </div>
+            <div class="rowpickers">
+                <label for="content">Seleccione el municipio</label>
+                <select class="form-select" aria-label="Default select example" name="chartcity" id="chartcity">
+                    <option selected value="Medellin">Medellín</option>
+                    <option value="Barbosa">Barbosa</option>
+                    <option value="Bello">Bello</option>
+                    <option value="Caldas">Caldas</option>
+                    <option value="Copacabana">Copacabana</option>
+                    <option value="Envigado">Envigado</option>
+                    <option value="Girardota">Girardota</option>
+                    <option value="Itagui">Itagüí</option>
+                    <option value="La estrella">La estrella</option>
+                    <option value="Sabaneta">Sabaneta</option>
+                </select>
+            </div>
+            <div class="rowpickers">
+                <input type="submit" value="Mostrar predicciones" class="btn btn-success">
+            </div>
+        </div>
+    </form>
+    <div class="row chart" id="chart">
+    </div>
+</main>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script type="text/javascript">
+    var graphs = {{ graphJSON | safe}};
+    Plotly.plot('chart', graphs, {});        
+</script>
+
+{% endblock %}
