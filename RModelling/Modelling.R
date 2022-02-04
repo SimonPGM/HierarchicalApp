@@ -1,8 +1,6 @@
 library(lme4)
 library(tidyverse)
 datos <- readRDS("./Data.Rds")
-datos_temp <- datos
-datos_temp[, c("Anio", "Mes")] <- scale(datos_temp[, c("Anio", "Mes")])
 modnull <- glmer(Recuperados ~ 1 + (1 | Nombre.municipio), data = datos, family = poisson()) # nolint
 modone <- glmer(Recuperados ~  Anio + (1 | Nombre.municipio), data = datos, family = poisson()) # nolint
 modtwo <- glmer(Recuperados ~ Anio + Mes + (1 | Nombre.municipio), data = datos, family = poisson()) # nolint
@@ -14,6 +12,8 @@ anova(modone, modtwo)
 anova(modtwo, modthree)
 anova(modthree, modfour)
 anova(modfour, modfive)
+comps <- anova(modnull, modone, modtwo, modthree, modfour, modfive) 
+saveRDS(comps, "comps.Rds")
 datos$Recuperados_hat <- round(predict(modfive, type = "response")) # nolint
 View(datos)
 datos_to_vis <- data.frame(Anio = rep(datos$Anio, 2),
@@ -22,3 +22,4 @@ datos_to_vis <- data.frame(Anio = rep(datos$Anio, 2),
     Municipio = rep(datos$Nombre.municipio, 2))
 
 write.csv(datos_to_vis, "Results.csv", row.names = F)
+saveRDS(modfive, "mod.Rds")
